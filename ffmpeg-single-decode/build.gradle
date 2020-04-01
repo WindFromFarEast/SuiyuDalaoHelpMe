@@ -1,0 +1,26 @@
+apply from: "$rootDir/module.gradle"
+
+android {
+    buildTypes {
+        debug {
+            buildConfigField "boolean", "ISDEBUG", "true"
+            debuggable true
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+        }
+        release {
+            minifyEnabled true
+            zipAlignEnabled true
+            debuggable true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+        }
+    }
+}
+
+dependencies {
+    compile fileTree(dir: 'libs', include: ['*.jar'])
+
+    compile project(':common-asserts')
+}
