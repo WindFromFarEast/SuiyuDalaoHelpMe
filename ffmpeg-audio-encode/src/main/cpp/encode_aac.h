@@ -38,13 +38,17 @@ private:
 
     SwrContext *swr;
 
+    uint8_t *mCachePcmData = nullptr;
+    bool mFirstMp4Encode = true;
+    int mCachePcmDataLength = 0;
+
     int EncodeFrame(AVCodecContext *pCodecCtx, AVFrame *pFrame);
 
 public:
 
     int EncodeStart(const char *aacPath);
 
-    int EncodeBuffer(const unsigned char *pcmBuffer, int length);
+    int EncodeBuffer(uint8_t *pcmBuffer, int length);
 
     int EncodeStop();
 

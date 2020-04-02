@@ -3,6 +3,10 @@
 #include "logger.h"
 
 int AACEncoder::EncodeFrame(AVCodecContext *pCodecCtx, AVFrame *audioFrame) {
+    int64_t pts = (int64_t)(1000000L * (frameCount++) * 1024.0F / audioStream->codec->sample_rate);
+    if (audioFrame != nullptr) {
+        audioFrame->pts = av_rescale_q(pts, (AVRational) { 1, AV_TIME_BASE }, audioStream->time_base);
+    }
     int ret = avcodec_send_frame(pCodecCtx, audioFrame);
     if (ret < 0) {
         LOGE("Could't send frame");
@@ -26,7 +30,7 @@ int AACEncoder::EncodeStart(const char *aacPath) {
     }
     fmt = pFormatCtx->oformat;
     //3.打开输出文件
-    if (ret = avio_open(&pFormatCtx->pb, aacPath, AVIO_FLAG_READ_WRITE) < 0) {
+    if ((ret = avio_open(&pFormatCtx->pb, aacPath, AVIO_FLAG_READ_WRITE)) < 0) {
         LOGE("Could't open output file, %d", ret);
         return ret;
     }
@@ -73,8 +77,8 @@ int AACEncoder::EncodeStart(const char *aacPath) {
 
     bufferSize = av_samples_get_buffer_size(NULL, pCodecCtx->channels, pCodecCtx->frame_size,
                                             pCodecCtx->sample_fmt, 1);
-    LOGE("channels: %d, frame_size: %d, sample_fmt: %d", pCodecCtx->channels, pCodecCtx->frame_size,
-         pCodecCtx->sample_fmt);
+    LOGE("channels: %d, frame_size: %d, sample_fmt: %d, bufferSize: %d", pCodecCtx->channels, pCodecCtx->frame_size,
+         pCodecCtx->sample_fmt, bufferSize);
     audioBuffer = (uint8_t *) av_malloc(bufferSize);
     avcodec_fill_audio_frame(audioFrame, pCodecCtx->channels, pCodecCtx->sample_fmt,
                              (const uint8_t *) audioBuffer, bufferSize, 1);
@@ -84,50 +88,86 @@ int AACEncoder::EncodeStart(const char *aacPath) {
     avformat_write_header(pFormatCtx, NULL);
     av_new_packet(&audioPacket, bufferSize);
 
-    //9.用于音频转码
-//    swr = swr_alloc();
-//    av_opt_set_channel_layout(swr, "in_channel_layout", AV_CH_LAYOUT_STEREO, 0);
-//    av_opt_set_channel_layout(swr, "out_channel_layout", AV_CH_LAYOUT_STEREO, 0);
-//    av_opt_set_int(swr, "in_sample_rate", 44100, 0);
-//    av_opt_set_int(swr, "out_sample_rate", 44100, 0);
-//    av_opt_set_sample_fmt(swr, "in_sample_fmt", AV_SAMPLE_FMT_S16, 0);
-//    av_opt_set_sample_fmt(swr, "out_sample_fmt", AV_SAMPLE_FMT_S16, 0);
-//    swr_init(swr);
-
-//    swr = swr_alloc_set_opts();
-
     return 0;
 }
 
-int AACEncoder::EncodeBuffer(const unsigned char *pcmBuffer, int len) {
+int AACEncoder::EncodeBuffer(uint8_t *data, int length) {
+    int ret = 0;
+    int originLength = length;
+    int bufferSize = av_samples_get_buffer_size(nullptr, audioStream->codec->channels, audioStream->codec->frame_size, audioStream->codec->sample_fmt, 1);
+    uint8_t *audioBuffer = static_cast<uint8_t *>(av_malloc(bufferSize));
+    avcodec_fill_audio_frame(audioFrame, audioStream->codec->channels, audioStream->codec->sample_fmt, audioBuffer, bufferSize, 1);
 
-//    uint8_t *outs[2];
-//    outs[0] = new uint8_t[len];
-//    outs[1] = new uint8_t[len];
-//    int count = swr_convert(swr, (uint8_t **) &outs, len * 4, &pcmBuffer, len / 4);
-//    audioFrame->data[0] = outs[0];
-//    audioFrame->data[1] = outs[1];
-//
-//    if (count >= 0) {
-//        EncodeFrame(pCodecCtx, audioFrame);
-//    } else {
-//        char errorMessage[1024] = {0};
-//        av_strerror(len, errorMessage, sizeof(errorMessage));
-//        LOGE("error message: %s", errorMessage);
-//    }
-//
-//    delete outs[0];
-//    delete outs[1];
-//    return 0;
-    uint8_t *outs = new uint8_t[len];
-    LOGE("bufferSize: %d, length: %d", bufferSize, len);
-    audioFrame->data[0] = const_cast<uint8_t *>(pcmBuffer);
-    int64_t pts = (int64_t)(1000000L * (frameCount++) * 1024.0F / audioStream->codec->sample_rate);
-    audioFrame->pts = av_rescale_q(pts, (AVRational) { 1, AV_TIME_BASE }, audioStream->time_base);
-    EncodeFrame(pCodecCtx, audioFrame);
+    audioFrame->format = audioStream->codec->sample_fmt;
+    audioFrame->nb_samples = audioStream->codec->frame_size;
 
-    delete []outs;
-    return 0;
+    uint8_t *combiningData = nullptr;
+    // encode first audio frame. check whether length > bufferSize or not.
+    if (length > bufferSize && mCachePcmData == nullptr && mFirstMp4Encode) {
+        mCachePcmData = static_cast<uint8_t *>(av_malloc(length));
+    }
+
+    if (mCachePcmData != nullptr) {
+        combiningData = static_cast<uint8_t *>(av_malloc(bufferSize));
+    }
+
+    if (mCachePcmData != nullptr) {
+
+        if (mFirstMp4Encode || mCachePcmDataLength == 0) {
+            //编码第一帧，此时无缓存PCM数据
+            audioFrame->data[0] = data;
+            ret = EncodeFrame(pCodecCtx, audioFrame);
+
+            length = length - bufferSize;
+
+            int firstEncodeTimes = 1;
+
+            while ((length - bufferSize) >= 0) {
+                memcpy(combiningData, data + firstEncodeTimes * bufferSize, bufferSize * sizeof(uint8_t));
+                audioFrame->data[0] = combiningData;
+                ret = EncodeFrame(pCodecCtx, audioFrame);
+                length = length - bufferSize;
+                firstEncodeTimes++;
+            }
+
+            memcpy(mCachePcmData, data + (firstEncodeTimes * bufferSize), (originLength - (firstEncodeTimes * bufferSize)) * sizeof(uint8_t));
+            mCachePcmDataLength = originLength - (firstEncodeTimes * bufferSize);
+            LOGE("cache length: %d", mCachePcmDataLength);
+        } else {
+            //不是第一帧，需要使用上一次剩下的PCM数据
+            memcpy(combiningData, mCachePcmData, mCachePcmDataLength * sizeof(uint8_t));
+            memcpy(combiningData + mCachePcmDataLength, data, (bufferSize - mCachePcmDataLength) * sizeof(uint8_t));
+            int curDataPos = bufferSize - mCachePcmDataLength;
+            audioFrame->data[0] = combiningData;
+
+            ret = EncodeFrame(pCodecCtx, audioFrame);
+            length = length - (bufferSize - mCachePcmDataLength);
+
+            while ((length - bufferSize) >= 0) {
+                memcpy(combiningData, data + curDataPos, bufferSize * sizeof(uint8_t));
+                audioFrame->data[0] = combiningData;
+                ret = EncodeFrame(pCodecCtx, audioFrame);
+                length = length - bufferSize;
+                curDataPos += bufferSize;
+            }
+
+            memcpy(mCachePcmData, data, length * sizeof(uint8_t));
+            mCachePcmDataLength = length;
+            LOGE("cache length: %d", mCachePcmDataLength);
+        }
+
+    } else {
+        ret = EncodeFrame(pCodecCtx, audioFrame);
+    }
+
+    if (combiningData != nullptr) {
+        av_free(combiningData);
+    }
+
+    mFirstMp4Encode = false;
+    av_free(audioBuffer);
+
+    return ret;
 }
 
 int AACEncoder::EncodeStop() {
@@ -142,6 +182,10 @@ int AACEncoder::EncodeStop() {
     av_free(audioBuffer);
     avio_close(pFormatCtx->pb);
     avformat_free_context(pFormatCtx);
+
+    mFirstMp4Encode = true;
+    frameCount = 0;
+    mCachePcmDataLength = 0;
     return 0;
 }
 

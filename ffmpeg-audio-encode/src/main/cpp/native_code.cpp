@@ -56,7 +56,7 @@ AACEncoder *pAACEncoder = NULL;
 void onAudioFrame(JNIEnv *env, jobject obj, jbyteArray jpcmBuffer, jint length) {
     if (NULL != pAACEncoder) {
         jbyte *buffer = env->GetByteArrayElements(jpcmBuffer, NULL);
-        pAACEncoder->EncodeBuffer((unsigned char *) buffer, length);
+        pAACEncoder->EncodeBuffer((uint8_t *) buffer, length);
         env->ReleaseByteArrayElements(jpcmBuffer, buffer, NULL);
     }
 }
