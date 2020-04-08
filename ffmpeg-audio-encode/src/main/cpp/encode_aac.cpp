@@ -94,78 +94,43 @@ int AACEncoder::EncodeStart(const char *aacPath) {
 int AACEncoder::EncodeBuffer(uint8_t *data, int length) {
     int ret = 0;
     int originLength = length;
-    int bufferSize = av_samples_get_buffer_size(nullptr, audioStream->codec->channels, audioStream->codec->frame_size, audioStream->codec->sample_fmt, 1);
-    uint8_t *audioBuffer = static_cast<uint8_t *>(av_malloc(bufferSize));
-    avcodec_fill_audio_frame(audioFrame, audioStream->codec->channels, audioStream->codec->sample_fmt, audioBuffer, bufferSize, 1);
+    bufferSize = av_samples_get_buffer_size(nullptr, audioStream->codec->channels, audioStream->codec->frame_size, audioStream->codec->sample_fmt, 1);
+    LOGE("bufferSize: %d", bufferSize);
+    if (mFirstMp4Encode) {
+        audioFrame->data[0] = audioBuffer;
+    }
 
     audioFrame->format = audioStream->codec->sample_fmt;
     audioFrame->nb_samples = audioStream->codec->frame_size;
 
-    uint8_t *combiningData = nullptr;
     // encode first audio frame. check whether length > bufferSize or not.
     if (length > bufferSize && mCachePcmData == nullptr && mFirstMp4Encode) {
-        mCachePcmData = static_cast<uint8_t *>(av_malloc(length));
+        mCachePcmData = static_cast<uint8_t *>(av_malloc(bufferSize));
     }
 
     if (mCachePcmData != nullptr) {
-        combiningData = static_cast<uint8_t *>(av_malloc(bufferSize));
-    }
-
-    if (mCachePcmData != nullptr) {
-
-        if (mFirstMp4Encode || mCachePcmDataLength == 0) {
-            //编码第一帧，此时无缓存PCM数据
-            audioFrame->data[0] = data;
-            ret = EncodeFrame(pCodecCtx, audioFrame);
-
-            length = length - bufferSize;
-
-            int firstEncodeTimes = 1;
-
-            while ((length - bufferSize) >= 0) {
-                memcpy(combiningData, data + firstEncodeTimes * bufferSize, bufferSize * sizeof(uint8_t));
-                audioFrame->data[0] = combiningData;
+        int encodedDataLength = 0;
+        while (true) {
+            if (length + mCachePcmDataLength >= bufferSize) {
+                // PCM Data里剩下的数据+缓存数据能够组成bufferSize作为一帧编码
+                memcpy(mCachePcmData, data + encodedDataLength, (bufferSize - mCachePcmDataLength) * sizeof(uint8_t));
+                encodedDataLength += (bufferSize - mCachePcmDataLength);
+                memcpy(audioFrame->data[0], mCachePcmData, bufferSize * sizeof(uint8_t));
                 ret = EncodeFrame(pCodecCtx, audioFrame);
-                length = length - bufferSize;
-                firstEncodeTimes++;
+                length = length - (bufferSize - mCachePcmDataLength);
+                mCachePcmDataLength = 0;
+            } else {
+                memcpy(mCachePcmData, data + encodedDataLength, length * sizeof(uint8_t));
+                mCachePcmDataLength += length;
+                break;
             }
-
-            memcpy(mCachePcmData, data + (firstEncodeTimes * bufferSize), (originLength - (firstEncodeTimes * bufferSize)) * sizeof(uint8_t));
-            mCachePcmDataLength = originLength - (firstEncodeTimes * bufferSize);
-            LOGE("cache length: %d", mCachePcmDataLength);
-        } else {
-            //不是第一帧，需要使用上一次剩下的PCM数据
-            memcpy(combiningData, mCachePcmData, mCachePcmDataLength * sizeof(uint8_t));
-            memcpy(combiningData + mCachePcmDataLength, data, (bufferSize - mCachePcmDataLength) * sizeof(uint8_t));
-            int curDataPos = bufferSize - mCachePcmDataLength;
-            audioFrame->data[0] = combiningData;
-
-            ret = EncodeFrame(pCodecCtx, audioFrame);
-            length = length - (bufferSize - mCachePcmDataLength);
-
-            while ((length - bufferSize) >= 0) {
-                memcpy(combiningData, data + curDataPos, bufferSize * sizeof(uint8_t));
-                audioFrame->data[0] = combiningData;
-                ret = EncodeFrame(pCodecCtx, audioFrame);
-                length = length - bufferSize;
-                curDataPos += bufferSize;
-            }
-
-            memcpy(mCachePcmData, data, length * sizeof(uint8_t));
-            mCachePcmDataLength = length;
-            LOGE("cache length: %d", mCachePcmDataLength);
         }
-
     } else {
+        memcpy(audioFrame->data[0], data, length * sizeof(uint8_t));
         ret = EncodeFrame(pCodecCtx, audioFrame);
     }
 
-    if (combiningData != nullptr) {
-        av_free(combiningData);
-    }
-
     mFirstMp4Encode = false;
-    av_free(audioBuffer);
 
     return ret;
 }
