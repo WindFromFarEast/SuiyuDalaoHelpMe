@@ -141,6 +141,7 @@ public class AudioRecordRecorder implements IAudioRecorder {
         @Override
         public void run() {
             try {
+                pcmPath = "sdcard/audio.pcm";
                 if (!TextUtils.isEmpty(pcmPath)) {
                     outputStream = new FileOutputStream(pcmPath);
                 }
