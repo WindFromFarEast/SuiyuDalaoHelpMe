@@ -12,6 +12,11 @@ extern "C" {
 #include <libavformat/avformat.h>
 #include <libswresample/swresample.h>
 #include <libavutil/opt.h>
+#include "libavfilter/avfilter.h"
+#include "libavfilter/avfiltergraph.h"
+#include "libavfilter/buffersink.h"
+#include "libavfilter/buffersrc.h"
+#include <unistd.h>
 
 #ifdef __cplusplus
 }
@@ -43,6 +48,17 @@ private:
     int mCachePcmDataLength = 0;
 
     int EncodeFrame(AVCodecContext *pCodecCtx, AVFrame *pFrame);
+
+    int initAudioFilter();
+    char m_filter_descr[512];
+    AVFilter *m_abuffersrc;
+    AVFilter *m_abuffersink;
+    AVFilterInOut *m_outputs;
+    AVFilterInOut *m_inputs;
+    AVFilterGraph *m_pFilterGraph;
+
+    AVFilterContext *m_pBufferSinkCtx;
+    AVFilterContext *m_pBufferSrcCtx;
 
 public:
 
