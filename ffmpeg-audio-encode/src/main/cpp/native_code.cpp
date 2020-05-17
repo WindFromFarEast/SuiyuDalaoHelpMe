@@ -1,7 +1,8 @@
 
 #include "native_code.h"
 #include "encode_aac.h"
-
+#include "MediaPlayer.h"
+#include "logger.h"
 
 /**
  * 动态注册
@@ -86,4 +87,35 @@ void encodeAudioStop(JNIEnv *env, jobject obj) {
         delete pAACEncoder;
         pAACEncoder = NULL;
     }
+}
+
+#define GET_PLAYER() MediaPlayer *player = reinterpret_cast<MediaPlayer *>(handle);\
+    if (player == nullptr) {\
+        LOGE("player is null.");\
+        return -1;\
+    }
+
+extern "C" JNIEXPORT jlong JNICALL
+Java_com_onzhou_audio_encode_MediaPlayer_nativeCreate(JNIEnv *env, jobject obj) {
+    MediaPlayer *player = new MediaPlayer;
+    return reinterpret_cast<long>(player);
+}
+
+extern "C" JNIEXPORT jint JNICALL
+Java_com_onzhou_audio_encode_MediaPlayer_nativeInit(JNIEnv *env, jobject thiz, jlong handle,
+                                                    jstring path, jobject surface) {
+    GET_PLAYER();
+    const char *path_ = env->GetStringUTFChars(path, nullptr);
+    string pathStr(path_);
+    ANativeWindow *window;
+    window = ANativeWindow_fromSurface(env, surface);
+    int ret = player->init(pathStr, window);
+    env->ReleaseStringUTFChars(path, path_);
+    return ret;
+}
+
+extern "C" JNIEXPORT jint JNICALL
+Java_com_onzhou_audio_encode_MediaPlayer_nativePlay(JNIEnv *env, jobject thiz, jlong handle) {
+    GET_PLAYER();
+    return player->play();
 }

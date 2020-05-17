@@ -11,9 +11,27 @@
 #include <android/log.h>
 #include <libavutil/time.h>
 
+extern "C" {
+#endif
+
+#include <libavcodec/avcodec.h>
+#include <libavformat/avformat.h>
+#include <libswresample/swresample.h>
+#include <libavutil/opt.h>
+#include "libavfilter/avfilter.h"
+#include "libavfilter/avfiltergraph.h"
+#include "libavfilter/buffersink.h"
+#include "libavfilter/buffersrc.h"
+#include <libavutil/imgutils.h>
+#include <libswscale/swscale.h>
+#include <unistd.h>
+
+#ifdef __cplusplus
+}
+
 #define LOG_TAG    "NativeAudioEncode"
-#define LOGE(format, ...)  __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, format, ##__VA_ARGS__)
-#define LOGI(format, ...)  __android_log_print(ANDROID_LOG_INFO,  LOG_TAG, format, ##__VA_ARGS__)
+#define LOGE(format, ...)  __android_log_print(ANDROID_LOG_ERROR, "XWXDebug", format, ##__VA_ARGS__)
+#define LOGI(format, ...)  __android_log_print(ANDROID_LOG_INFO,  "XWXDebug", format, ##__VA_ARGS__)
 #else
 #define LOGE(format, ...)  printf(LOG_TAG format "\n", ##__VA_ARGS__)
 #define LOGI(format, ...)  printf(LOG_TAG format "\n", ##__VA_ARGS__)
