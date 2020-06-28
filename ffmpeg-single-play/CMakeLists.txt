@@ -25,4 +25,10 @@ set_target_properties(ffmpeg-single
 #头文件
 include_directories(${LIBRARY_DIR}/libs/${ANDROID_ABI}/include)
 
-target_link_libraries(native-player ffmpeg-single log android)
+target_link_libraries(
+        native-player
+        ffmpeg-single
+        log
+        android
+        OpenSLES
+)

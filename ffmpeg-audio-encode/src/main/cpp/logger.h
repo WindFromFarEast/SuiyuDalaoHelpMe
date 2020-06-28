@@ -32,6 +32,7 @@ extern "C" {
 #define LOG_TAG    "NativeAudioEncode"
 #define LOGE(format, ...)  __android_log_print(ANDROID_LOG_ERROR, "XWXDebug", format, ##__VA_ARGS__)
 #define LOGI(format, ...)  __android_log_print(ANDROID_LOG_INFO,  "XWXDebug", format, ##__VA_ARGS__)
+#define LOGD(format, ...)  __android_log_print(ANDROID_LOG_DEBUG,  "XWXDebug", format, ##__VA_ARGS__)
 #else
 #define LOGE(format, ...)  printf(LOG_TAG format "\n", ##__VA_ARGS__)
 #define LOGI(format, ...)  printf(LOG_TAG format "\n", ##__VA_ARGS__)

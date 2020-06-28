@@ -31,4 +31,5 @@ include_directories(${LIBFFMPEG_DIR}/libs/${ANDROID_ABI}/include)
 target_link_libraries(native-encode
                    ffmpeg-single
                    android
+                    OpenSLES
                    log)
