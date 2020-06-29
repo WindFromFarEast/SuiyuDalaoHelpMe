@@ -1227,7 +1227,7 @@ void CDECL id3tag_set_comment(lame_t gfp, const char* comment);
 int CDECL id3tag_set_track(lame_t gfp, const char* track);
 
 /* return non-zero result if genre name or number is invalid
-  result 0: OK
+  result 0: READY
   result -1: genre number out of range
   result -2: no valid ID3v1 genre name, mapped to ID3v1 'Other'
              but taken as-is for ID3v2 genre tag */

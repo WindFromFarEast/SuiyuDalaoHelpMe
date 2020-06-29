@@ -32,4 +32,6 @@ target_link_libraries(native-encode
                    ffmpeg-single
                    android
                     OpenSLES
+                    EGL
+                    GLESv2
                    log)
