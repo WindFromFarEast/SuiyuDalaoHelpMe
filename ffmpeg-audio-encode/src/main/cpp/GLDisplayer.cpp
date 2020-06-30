@@ -6,21 +6,20 @@
 
 static const char *vertexShaderCode = {
         "precision mediump float;\n"
-        "attribute vec4 a_position;\n"
-        "attribute vec2 a_texturePosition;\n"
-        "varying vec2 v_texturePosition;\n"
+        "attribute vec2 a_position;\n"
+        "attribute vec2 a_texPosition;\n"
+        "varying vec2 v_texPosition;\n"
         "uniform mat4 mvpMatrix;\n"
         "void main() {\n"
-        "v_texturePosition = a_texturePosition;\n"
-        "gl_Position = mvpMatrix * a_position;\n"
+        "gl_Position = vec4(a_position, 0.0, 1.0);\n"
+        "v_texPosition = a_texPosition;\n"
         "}"
 };
 static const char *fragmentShaderCode = {
-        "precision mediump float;\n"
-        "varying vec2 v_texturePosition;\n"
-        "uniform sampler2D u_texture;\n"
+        "varying vec2 v_texPosition;\n"
+        "uniform sampler2D inputImageTexture;\n"
         "void main() {\n"
-        "    gl_FragColor = texture2D(u_texture, v_texturePosition);\n"
+        "gl_FragColor = texture2D(inputImageTexture, v_texPosition);\n"
         "}"
 };
 
@@ -32,9 +31,9 @@ int GLDisplayer::init() {
     }
     m_program.use();
     m_positionLoc = glGetAttribLocation(m_program.getProgramID(), "a_position");
-    m_texPositionLoc = glGetAttribLocation(m_program.getProgramID(), "a_texturePosition");
+    m_texPositionLoc = glGetAttribLocation(m_program.getProgramID(), "a_texPosition");
+    m_texLoc = glGetUniformLocation(m_program.getProgramID(), "inputImageTexture");
     m_mvpLoc = glGetUniformLocation(m_program.getProgramID(), "mvpMatrix");
-    m_texLoc = glGetUniformLocation(m_program.getProgramID(), "u_texture");
     m_program.unuse();
     return READY;
 }
@@ -90,8 +89,9 @@ void GLDisplayer::draw(GLFrame &frame) {
             1.f, 0.f
     };
     glVertexAttribPointer(m_texPositionLoc, 2, GL_FLOAT, GL_FALSE, 0, textureData);
-    glUniformMatrix4fv(m_mvpLoc, 1, GL_FALSE, mvpMatrix);
     glUniform1i(m_texLoc, 0);
+
+    glUniformMatrix4fv(m_mvpLoc, 1, GL_FALSE, mvpMatrix);
 
     glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 

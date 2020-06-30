@@ -19,8 +19,8 @@ private:
     GLProgram m_program;
     GLint m_positionLoc = -1;
     GLint m_texPositionLoc = -1;
-    GLint m_mvpLoc = -1;
     GLint m_texLoc = -1;
+    GLint m_mvpLoc = -1;
 
     Size m_surfaceSize;
 };
