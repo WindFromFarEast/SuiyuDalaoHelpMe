@@ -5,19 +5,17 @@
 #ifndef MYOWNSTUDY_RECORDEROPENGLPROXY_H
 #define MYOWNSTUDY_RECORDEROPENGLPROXY_H
 
-
-#include <android/native_window.h>
 #include <sys/types.h>
 #include <pthread.h>
 #include <jni.h>
 #include <string>
-#include "EGL/egl.h"
 #include "android/log.h"
 #include "functional"
-#include <GLES2/gl2.h>
-#include "GLProgram.h"
 #include <atomic>
 #include "XWXResult.h"
+#include "GLData.h"
+#include "GLOESTransformer.h"
+#include "GLDisplayer.h"
 
 void *render_thread(void *args);
 
@@ -41,7 +39,7 @@ public:
     void destroyEGL();
     void updateRenderContent(GLuint surfaceTextureID, float mvp[]);
 
-    void render();
+    void display(GLuint texID);
 
     void setOnOpenGLCreateCallback(std::function<int(void*)> func) { m_onOpenGLCreateCallback = func; };
     void setOnOpenGLRunningCallback(std::function<void(void*)> func) { m_onOpenGLRunningCallback = func; };
@@ -50,7 +48,7 @@ public:
     void setSurfaceTextureID(GLuint id) { m_iSurfaceTextureID = id; };
 
 public:
-    GLuint m_iSurfaceTextureID = -1;
+    GLuint m_iSurfaceTextureID = 0;
     float *m_pTexMatrix = nullptr;
     RecorderEnv recorderEnv;
 
@@ -73,13 +71,8 @@ private:
 
     std::atomic_bool m_bStopRender;
 
-    GLProgram *m_DisplayProgram = nullptr;
-
-    GLint m_iPositionLoc;
-    GLint m_iTexPositionLoc;
-    GLint m_iMVPLoc;
-    GLint m_iTextureMatrixLoc;
-    GLint m_iTextureLoc;
+    GLDisplayer m_glDisplayer;
+    GLOESTransformer m_glOESTransformer;
 };
 
 

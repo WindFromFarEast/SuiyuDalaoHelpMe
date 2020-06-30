@@ -3,35 +3,9 @@
 //
 #include "RecorderOpenGLProxy.h"
 #include <jni.h>
-#include "GLES2/gl2ext.h"
-#include "Matrix.h"
-#include "ShaderCode.h"
-#include "GLData.h"
+#include "GLUtils.h"
 
 #define TAG "RecorderOpenGLProxy"
-
-static const char *vertexShaderCode = {
-        "precision mediump float;\n"
-        "attribute vec4 a_position;\n"
-        "attribute vec2 a_texturePosition;\n"
-        "varying vec2 v_texturePosition;\n"
-        "uniform mat4 mvpMatrix;\n"
-        "uniform mat4 textureMatrix;\n"
-        "void main() {\n"
-        "v_texturePosition = (textureMatrix * vec4(a_texturePosition, 0.0, 1.0)).xy;\n"
-        "gl_Position = mvpMatrix * a_position;\n"
-        "}"
-};
-
-static const char *fragmentShaderCode = {
-        "#extension GL_OES_EGL_image_external : require\n"
-        "precision mediump float;\n"
-        "varying vec2 v_texturePosition;\n"
-        "uniform samplerExternalOES u_texture;\n"
-        "void main() {\n"
-        "gl_FragColor = texture2D(u_texture, v_texturePosition);\n"
-        "}"
-};
 
 RecorderOpenGLProxy::RecorderOpenGLProxy() : m_bStopRender(false) {
     pthread_mutex_init(&m_mutex, nullptr);
@@ -118,21 +92,18 @@ int RecorderOpenGLProxy::swapBuffers() {
 }
 
 int RecorderOpenGLProxy::initRenderEnv() {
-    int ret;
-    m_DisplayProgram = new GLProgram;
-    ret = m_DisplayProgram->init(vertexShaderCode, fragmentShaderCode);
+    int ret = m_glDisplayer.init();
+    m_glDisplayer.setSurfaceSize(m_iSurfaceWidth, m_iSurfaceHeight);
     if (ret != 0) {
-        LOGE("program init failed. ret is %d", ret);
+        LOGE("glDisplayer init failed. ret is %d", ret);
         return ret;
     }
-    m_DisplayProgram->use();
-    m_iPositionLoc = glGetAttribLocation(m_DisplayProgram->getProgramID(), "a_position");
-    m_iTexPositionLoc = glGetAttribLocation(m_DisplayProgram->getProgramID(), "a_texturePosition");
-    m_iMVPLoc = glGetUniformLocation(m_DisplayProgram->getProgramID(), "mvpMatrix");
-    m_iTextureLoc = glGetUniformLocation(m_DisplayProgram->getProgramID(), "u_texture");
-    m_iTextureMatrixLoc = glGetUniformLocation(m_DisplayProgram->getProgramID(), "textureMatrix");
-    m_DisplayProgram->unuse();
-    return ret;
+    ret = m_glOESTransformer.init();
+    if (ret != 0) {
+        LOGE("glOESTransformer init failed. ret is %d", ret);
+        return ret;
+    }
+    return READY;
 }
 
 void RecorderOpenGLProxy::stopRender() {
@@ -165,74 +136,15 @@ void RecorderOpenGLProxy::updateRenderContent(GLuint surfaceTextureID, float *mv
     pthread_mutex_unlock(&m_mutex);
 }
 
-void RecorderOpenGLProxy::render() {
-    m_DisplayProgram->use();
-
-    Size inputSize = { 1280, 720 };
-    Size outputSize = { m_iSurfaceWidth, m_iSurfaceHeight };
-
-    float inputRatio = inputSize.width * 1.0f / inputSize.height;
-    float inputWidth = inputRatio;
-    float inputHeight = 1.0f;
-    Rect vertexRect = { -inputWidth / 2, inputWidth / 2, inputHeight / 2, -inputHeight / 2 };
-
-    float outputRatio = outputSize.width * 1.0f / outputSize.height;
-    float outputWidth = outputRatio;
-    float outputHeight = 1.0f;
-
-    float scale = fmaxf(outputWidth / inputWidth, outputHeight / inputHeight);
-
-    auto mvpMatrix = new float[MATRIX_LENGTH];
-    matrixSetIdentityM(mvpMatrix);
-
-    auto orthoMatrix = new float[MATRIX_LENGTH];
-    matrixSetIdentityM(orthoMatrix);
-    ortho(orthoMatrix, -outputWidth / 2, outputWidth / 2, -outputHeight / 2, outputHeight / 2, -1, 1);
-
-    auto scaleMatrix = new float[MATRIX_LENGTH];
-    matrixScaleM(scaleMatrix, scale, scale, 0.f);
-
-    matrixMultiplyMM(mvpMatrix, scaleMatrix, orthoMatrix);
-
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
-    glViewport(0, 0, m_iSurfaceWidth, m_iSurfaceHeight);
-    glClearColor(0, 0, 0, 0);
-    glClear(GL_COLOR_BUFFER_BIT);
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_EXTERNAL_OES, m_iSurfaceTextureID);
-    glEnableVertexAttribArray(m_iPositionLoc);
-    glEnableVertexAttribArray(m_iTexPositionLoc);
-    float vertexData[] = {
-            vertexRect.left, vertexRect.top,
-            vertexRect.right, vertexRect.top,
-            vertexRect.left, vertexRect.bottom,
-            vertexRect.right, vertexRect.bottom
+void RecorderOpenGLProxy::display(GLuint texID) {
+    GLFrame frame = {
+            .texID = texID,
+            .texSize = { 1280, 720 },
     };
-    glVertexAttribPointer(m_iPositionLoc, 2, GL_FLOAT, GL_FALSE, 0, vertexData);
-    float textureData[] = {
-            0.f, 1.f,
-            1.f, 1.f,
-            0.f, 0.f,
-            1.f, 0.f
-    };
-    glVertexAttribPointer(m_iTexPositionLoc, 2, GL_FLOAT, GL_FALSE, 0, textureData);
-    glUniformMatrix4fv(m_iTextureMatrixLoc, 1, GL_FALSE, m_pTexMatrix);
-    glUniformMatrix4fv(m_iMVPLoc, 1, GL_FALSE, mvpMatrix);
-    glUniform1i(m_iTextureLoc, 0);
-
-    glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
-    glFinish();
-
-    glDisableVertexAttribArray(m_iPositionLoc);
-    glDisableVertexAttribArray(m_iTexPositionLoc);
-    glBindTexture(GL_TEXTURE_2D, 0);
-
-    m_DisplayProgram->unuse();
-
-    delete[] mvpMatrix;
-    delete[] orthoMatrix;
+    m_glDisplayer.draw(frame);
 }
 
+static int counts = 0;
 void *render_thread(void *args) {
     auto proxy = reinterpret_cast<RecorderOpenGLProxy *>(args);
     if (!proxy) {
@@ -263,7 +175,18 @@ void *render_thread(void *args) {
         if (proxy->m_onOpenGLRunningCallback != nullptr) {
             proxy->m_onOpenGLRunningCallback(&proxy->recorderEnv);
         }
-        proxy->render();
+
+        Size oesTexSize = {
+                .width = 1280,
+                .height = 720
+        };
+        proxy->m_glOESTransformer.setTextureData(proxy->m_iSurfaceTextureID, oesTexSize);
+        GLuint commonTexID = proxy->m_glOESTransformer.transform();
+//        char name[1024];
+//        sprintf(name, "sdcard/rgba/%d.rgba", counts++);
+//        writeTextureToFile(commonTexID, 1280, 720, name);
+
+        proxy->display(commonTexID);
         proxy->swapBuffers();
         pthread_mutex_unlock(&proxy->m_mutex);
     }
