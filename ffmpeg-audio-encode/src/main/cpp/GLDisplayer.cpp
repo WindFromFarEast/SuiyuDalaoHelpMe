@@ -11,7 +11,7 @@ static const char *vertexShaderCode = {
         "varying vec2 v_texPosition;\n"
         "uniform mat4 mvpMatrix;\n"
         "void main() {\n"
-        "gl_Position = vec4(a_position, 0.0, 1.0);\n"
+        "gl_Position = (mvpMatrix * vec4(a_position, 0.0, 1.0));\n"
         "v_texPosition = a_texPosition;\n"
         "}"
 };
@@ -53,7 +53,7 @@ void GLDisplayer::draw(GLFrame &frame) {
     float outputWidth = outputRatio;
     float outputHeight = 1.0f;
 
-    float scale = fmaxf(outputWidth / inputWidth, outputHeight / inputHeight);
+    float scale = fminf(outputWidth / inputWidth, outputHeight / inputHeight);
 
     auto mvpMatrix = new float[MATRIX_LENGTH];
     matrixSetIdentityM(mvpMatrix);
@@ -63,6 +63,7 @@ void GLDisplayer::draw(GLFrame &frame) {
     ortho(orthoMatrix, -outputWidth / 2, outputWidth / 2, -outputHeight / 2, outputHeight / 2, -1, 1);
 
     auto scaleMatrix = new float[MATRIX_LENGTH];
+    matrixSetIdentityM(scaleMatrix);
     matrixScaleM(scaleMatrix, scale, scale, 0.f);
 
     matrixMultiplyMM(mvpMatrix, scaleMatrix, orthoMatrix);
