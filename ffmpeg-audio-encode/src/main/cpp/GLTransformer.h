@@ -24,6 +24,10 @@ public:
     void setRotate(int degree) {
         m_iRotateDegree = degree;
     };
+    void setFlip(bool flipX, bool flipY) {
+        m_bFlipX = flipX;
+        m_bFlipY = flipY;
+    };
 
 private:
     GLuint m_iTexID = 0;
@@ -42,6 +46,8 @@ private:
     GLProgram m_program;
 
     int m_iRotateDegree = 0;
+    bool m_bFlipX = false;
+    bool m_bFlipY = false;
 };
 
 

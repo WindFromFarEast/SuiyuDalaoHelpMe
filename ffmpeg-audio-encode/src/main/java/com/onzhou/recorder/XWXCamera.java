@@ -71,7 +71,7 @@ public class XWXCamera {
 
         //懒得写了，直接默认auto focus mode.
         if (supportFocusMode(Camera.Parameters.FOCUS_MODE_AUTO, parameters)) {
-            parameters.setFocusMode(Camera.Parameters.FOCUS_MODE_AUTO);
+            parameters.setFocusMode(Camera.Parameters.FOCUS_MODE_CONTINUOUS_VIDEO);
         }
 
         mCamera.setParameters(parameters);

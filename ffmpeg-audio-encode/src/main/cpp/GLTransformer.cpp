@@ -115,12 +115,19 @@ GLuint GLTransformer::transform(GLFrame &output) {
     glEnableVertexAttribArray(m_iTexturePosLoc);
     glVertexAttribPointer(m_iTexturePosLoc, 2, GL_FLOAT, GL_FALSE, 0, textureData);
 
+    glUniform1i(m_iTextureLoc, 0);
+
     float rotateM[MATRIX_LENGTH];
     matrixSetIdentityM(rotateM);
-    matrixRotateM(rotateM, m_iRotateDegree * 1.0f, 0.f, 1.f, 0.f);
+    matrixRotateM(rotateM, m_iRotateDegree * 1.0f, 0.f, 0.f, 1.f);
+    if (m_bFlipX) {
+        matrixRotateM(rotateM, 180.0f, 0.f, 1.f, 0.f);
+    }
+    if (m_bFlipY) {
+        matrixRotateM(rotateM, 180.0f, 1.f, 0.f, 0.f);
+    }
 
-    glUniform1i(m_iTextureLoc, 0);
-    glUniformMatrix4fv(m_iMvpLoc, 1, GL_FALSE, rotateM);
+    glUniformMatrix4fv(m_iMvpLoc, 1, false, rotateM);
 
     glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
     glFinish();

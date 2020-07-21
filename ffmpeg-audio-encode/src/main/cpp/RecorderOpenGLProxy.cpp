@@ -172,7 +172,8 @@ void *render_thread(void *args) {
             .height = 1280
     };
     proxy->m_glTransformer.setOutputTexData(outSize);
-    proxy->m_glTransformer.setRotate(90);
+    proxy->m_glTransformer.setRotate(270);
+    proxy->m_glTransformer.setFlip(false, true);
     ret = proxy->initRenderEnv();
     if (ret != 0) {
         LOGE("initRenderEnv failed. ret is %d", ret);
