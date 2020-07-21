@@ -16,6 +16,7 @@
 #include "GLData.h"
 #include "GLOESTransformer.h"
 #include "GLDisplayer.h"
+#include "GLTransformer.h"
 
 void *render_thread(void *args);
 
@@ -73,6 +74,7 @@ private:
 
     GLDisplayer m_glDisplayer;
     GLOESTransformer m_glOESTransformer;
+    GLTransformer m_glTransformer;
 };
 
 

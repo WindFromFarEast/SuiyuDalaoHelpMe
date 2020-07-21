@@ -103,6 +103,11 @@ int RecorderOpenGLProxy::initRenderEnv() {
         LOGE("glOESTransformer init failed. ret is %d", ret);
         return ret;
     }
+    ret = m_glTransformer.init();
+    if (ret != 0) {
+        LOGE("glTransformer init failed. ret is %d", ret);
+        return ret;
+    }
     return READY;
 }
 
@@ -139,7 +144,7 @@ void RecorderOpenGLProxy::updateRenderContent(GLuint surfaceTextureID, float *mv
 void RecorderOpenGLProxy::display(GLuint texID) {
     GLFrame frame = {
             .texID = texID,
-            .texSize = { 1280, 720 },
+            .texSize = { 720, 1280 },
     };
     m_glDisplayer.draw(frame);
 }
@@ -162,6 +167,12 @@ void *render_thread(void *args) {
         proxy->m_onOpenGLCreateCallback(&proxy->recorderEnv);
     }
 
+    Size outSize = {
+            .width = 1280,
+            .height = 720
+    };
+    proxy->m_glTransformer.setOutputTexData(outSize);
+//    proxy->m_glTransformer.setRotate(90);
     ret = proxy->initRenderEnv();
     if (ret != 0) {
         LOGE("initRenderEnv failed. ret is %d", ret);
@@ -186,7 +197,15 @@ void *render_thread(void *args) {
 //        sprintf(name, "sdcard/rgba/%d.rgba", counts++);
 //        writeTextureToFile(commonTexID, 1280, 720, name);
 
-        proxy->display(commonTexID);
+        GLFrame afterOesFrame = {
+                .texID = commonTexID,
+                .texSize = {.width = 1280, .height = 720},
+        };
+        proxy->m_glTransformer.setInputTexData(afterOesFrame);
+        GLFrame transformFrame;
+        proxy->m_glTransformer.transform(transformFrame);
+
+        proxy->display(transformFrame.texID);
         proxy->swapBuffers();
         pthread_mutex_unlock(&proxy->m_mutex);
     }
