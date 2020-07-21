@@ -117,7 +117,7 @@ GLuint GLTransformer::transform(GLFrame &output) {
 
     float rotateM[MATRIX_LENGTH];
     matrixSetIdentityM(rotateM);
-    matrixRotateM(rotateM, 90.0f, 0.f, 1.f, 0.f);
+    matrixRotateM(rotateM, m_iRotateDegree * 1.0f, 0.f, 1.f, 0.f);
 
     glUniform1i(m_iTextureLoc, 0);
     glUniformMatrix4fv(m_iMvpLoc, 1, GL_FALSE, rotateM);

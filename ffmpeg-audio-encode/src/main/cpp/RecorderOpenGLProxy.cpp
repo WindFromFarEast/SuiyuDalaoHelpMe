@@ -168,11 +168,11 @@ void *render_thread(void *args) {
     }
 
     Size outSize = {
-            .width = 1280,
-            .height = 720
+            .width = 720,
+            .height = 1280
     };
     proxy->m_glTransformer.setOutputTexData(outSize);
-//    proxy->m_glTransformer.setRotate(90);
+    proxy->m_glTransformer.setRotate(90);
     ret = proxy->initRenderEnv();
     if (ret != 0) {
         LOGE("initRenderEnv failed. ret is %d", ret);
