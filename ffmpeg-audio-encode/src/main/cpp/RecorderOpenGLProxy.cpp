@@ -173,7 +173,7 @@ void *render_thread(void *args) {
     };
     proxy->m_glTransformer.setOutputTexData(outSize);
     proxy->m_glTransformer.setRotate(90);
-    proxy->m_glTransformer.setFlip(false, false);
+    proxy->m_glTransformer.setFlip(true, false);
     ret = proxy->initRenderEnv();
     if (ret != 0) {
         LOGE("initRenderEnv failed. ret is %d", ret);
@@ -204,10 +204,6 @@ void *render_thread(void *args) {
         proxy->m_glTransformer.setInputTexData(afterOesFrame);
         GLFrame transformFrame;
         proxy->m_glTransformer.transform(transformFrame);
-
-//        char name[1024];
-//        sprintf(name, "sdcard/rgba/%d.rgba", counts++);
-//        writeTextureToFile(transformFrame.texID, 720, 1280, name);
 
         //上屏
         proxy->display(transformFrame.texID);
