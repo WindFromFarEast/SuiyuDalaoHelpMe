@@ -172,8 +172,8 @@ void *render_thread(void *args) {
             .height = 1280
     };
     proxy->m_glTransformer.setOutputTexData(outSize);
-    proxy->m_glTransformer.setRotate(270);
-    proxy->m_glTransformer.setFlip(false, true);
+    proxy->m_glTransformer.setRotate(90);
+    proxy->m_glTransformer.setFlip(false, false);
     ret = proxy->initRenderEnv();
     if (ret != 0) {
         LOGE("initRenderEnv failed. ret is %d", ret);
@@ -188,16 +188,15 @@ void *render_thread(void *args) {
             proxy->m_onOpenGLRunningCallback(&proxy->recorderEnv);
         }
 
+        //OES转普通纹理
         Size oesTexSize = {
                 .width = 1280,
                 .height = 720
         };
         proxy->m_glOESTransformer.setTextureData(proxy->m_iSurfaceTextureID, oesTexSize);
         GLuint commonTexID = proxy->m_glOESTransformer.transform();
-//        char name[1024];
-//        sprintf(name, "sdcard/rgba/%d.rgba", counts++);
-//        writeTextureToFile(commonTexID, 1280, 720, name);
 
+        //Camera帧旋转\翻转处理
         GLFrame afterOesFrame = {
                 .texID = commonTexID,
                 .texSize = {.width = 1280, .height = 720},
@@ -206,6 +205,11 @@ void *render_thread(void *args) {
         GLFrame transformFrame;
         proxy->m_glTransformer.transform(transformFrame);
 
+//        char name[1024];
+//        sprintf(name, "sdcard/rgba/%d.rgba", counts++);
+//        writeTextureToFile(transformFrame.texID, 720, 1280, name);
+
+        //上屏
         proxy->display(transformFrame.texID);
         proxy->swapBuffers();
         pthread_mutex_unlock(&proxy->m_mutex);

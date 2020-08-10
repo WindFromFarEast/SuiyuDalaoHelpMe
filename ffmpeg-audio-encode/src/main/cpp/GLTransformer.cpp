@@ -130,13 +130,14 @@ GLuint GLTransformer::transform(GLFrame &output) {
     glUniformMatrix4fv(m_iMvpLoc, 1, false, rotateM);
 
     glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
-    glFinish();
 
     glDisableVertexAttribArray(m_iVertexPosLoc);
     glDisableVertexAttribArray(m_iTexturePosLoc);
     glBindTexture(GL_TEXTURE_2D, 0);
 
     m_program.unuse();
+
+    glFinish();
 
     output.texSize = m_outSize;
     output.texID = m_iFboTexID;

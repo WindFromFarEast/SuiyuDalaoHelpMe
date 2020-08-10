@@ -47,7 +47,10 @@ void GLDisplayer::draw(GLFrame &frame) {
     float inputRatio = inputSize.width * 1.0f / inputSize.height;
     float inputWidth = inputRatio;
     float inputHeight = 1.0f;
-    Rect vertexRect = { -inputWidth / 2, inputWidth / 2, inputHeight / 2, -inputHeight / 2 };
+    Rect vertexRect = { .left = -inputWidth / 2,
+                        .right = inputWidth / 2,
+                        .top = inputHeight / 2,
+                        .bottom = -inputHeight / 2 };
 
     float outputRatio = outputSize.width * 1.0f / outputSize.height;
     float outputWidth = outputRatio;
