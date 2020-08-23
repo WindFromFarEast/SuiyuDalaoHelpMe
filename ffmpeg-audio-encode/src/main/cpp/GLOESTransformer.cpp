@@ -121,6 +121,7 @@ GLuint GLOESTransformer::transform() {
     glDisableVertexAttribArray(m_iVertexPosLoc);
     glDisableVertexAttribArray(m_iTexturePosLoc);
     glBindTexture(GL_TEXTURE_2D, 0);
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
     m_program.unuse();
 

@@ -105,7 +105,7 @@ void GLDisplayer::draw(GLFrame &frame) {
         return;
     }
 
-    glFinish();
+    glFlush();
 
     glDisableVertexAttribArray(m_positionLoc);
     glDisableVertexAttribArray(m_texPositionLoc);

@@ -24,6 +24,8 @@ public class XWXCamera {
     private int mFrontCamOrientation;
     private int mUsableCameraNum;
 
+    private XWXCameraSetting mSetting;
+
     public XWXCamera() {
 
     }
@@ -59,7 +61,7 @@ public class XWXCamera {
         if (mCamera == null) {
             return XWXResult.NO_USABLE_CAMERA;
         }
-
+        mSetting = setting;
         Camera.Parameters parameters = mCamera.getParameters();
         Camera.Size bestPreviewSize = getBestSize(setting.getPreviewSize().getWidth(), setting.getPreviewSize().getHeight(), parameters.getSupportedPreviewSizes());
         LogUtil.i(TAG, "find best preview size: width->" + bestPreviewSize.width + ", height: " + bestPreviewSize.height);
