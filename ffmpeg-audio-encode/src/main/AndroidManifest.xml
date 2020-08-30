@@ -12,13 +12,13 @@
         android:supportsRtl="true"
         android:theme="@style/AppTheme"
         android:testOnly="false">
-        <activity android:name="com.onzhou.audio.main.AudioEncodeActivity">
-        </activity>
+        <activity android:name="com.onzhou.audio.main.AudioEncodeActivity"/>
 
-        <activity android:name="com.onzhou.audio.main.PlayerActivity">
-        </activity>
+        <activity android:name="com.onzhou.audio.main.PlayerActivity"/>
 
-        <activity android:name="com.onzhou.ui.RecorderActivity">
+        <activity android:name="com.onzhou.ui.RecorderActivity"/>
+
+        <activity android:name="com.onzhou.MainActivity">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
 

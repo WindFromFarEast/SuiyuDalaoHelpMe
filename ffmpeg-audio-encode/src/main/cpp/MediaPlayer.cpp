@@ -56,16 +56,16 @@ int MediaPlayer::init(string path, ANativeWindow *window) {
     }
 
     //init OpenSL ES..
-    ret = createEngine();
-    ret = createOutputMix();
-    ret = createPlayer();
+//    ret = createEngine();
+//    ret = createOutputMix();
+//    ret = createPlayer();
 
 //    pthread_mutex_init(&m_vMutex, nullptr);
-//    pthread_mutex_init(&m_aMutex, nullptr);
+    pthread_mutex_init(&m_aMutex, nullptr);
 //    pthread_cond_init(&m_vCond, nullptr);
 //    pthread_create(&m_vThreadID, nullptr, play_video, this);
-//    pthread_cond_init(&m_aCond, nullptr);
-//    pthread_create(&m_aThreadID, nullptr, play_audio, this);
+    pthread_cond_init(&m_aCond, nullptr);
+    pthread_create(&m_aThreadID, nullptr, play_audio, this);
 
     m_initialized = true;
 
@@ -334,7 +334,7 @@ void *play_audio(void *args) {
 
 //    pthread_cond_wait(&player->m_aCond, &player->m_aMutex);
 
-    AVPacket *packet = static_cast<AVPacket *>(av_malloc(sizeof(AVPacket)));
+    AVPacket *packet = av_packet_alloc();
     AVFrame *frame = av_frame_alloc();
 
     SwrContext *swrContext = nullptr;
@@ -354,7 +354,7 @@ void *play_audio(void *args) {
     swr_init(swrContext);
 
     //缓冲区大小 = 采样率 * 采样精度
-    int bufferSize = out_sample_rate * 2;
+    int bufferSize = av_samples_get_buffer_size(nullptr, out_nb_channels, player->m_aCodecCtx->frame_size, out_sample_fmt, 1);
     uint8_t *outBuffer = static_cast<uint8_t *>(av_malloc(sizeof(uint8_t) * bufferSize));
 
     FILE *pcmFile = fopen("sdcard/audio.pcm", "wb");
@@ -364,26 +364,74 @@ void *play_audio(void *args) {
     }
 
     int decodeRet = -1;
-    while (av_read_frame(player->m_fmtCtx, packet) >= 0) {
-        if (packet->stream_index == player->m_audioIndex) {
-            int codecRet = avcodec_send_packet(player->m_aCodecCtx, packet);
-            if (codecRet < 0 && codecRet != AVERROR(EAGAIN) && codecRet != AVERROR_EOF) {
-                LOGE("send packet failed. ret: %d", codecRet);
+    bool needResend = false;
+    while(1) {
+        decodeRet = av_read_frame(player->m_fmtCtx, packet);
+        if (decodeRet < 0) {
+            if (decodeRet != AVERROR_EOF) {
+                LOGE("read audio frame failed, ret is %d", decodeRet);
                 break;
             }
-            codecRet = avcodec_receive_frame(player->m_aCodecCtx, frame);
-            if (codecRet < 0 && codecRet != AVERROR_EOF) {
-                LOGE("avcodec_receive_frame failed. ret: %d", codecRet);
-                break;
-            }
-            if (codecRet == 0) {
-                //decode success.
-                swr_convert(swrContext, &outBuffer, bufferSize, (const uint8_t **)frame->data, frame->nb_samples);
-                int size = av_samples_get_buffer_size(nullptr, out_nb_channels, frame->nb_samples, out_sample_fmt, 1);
-                LOGI("decode one audio frame.");
-                fwrite(outBuffer, 1, size, pcmFile);
-            }
+            LOGI("read audio frame eof.");
+            break;
+        }
+        LOGD("read audio frame success.");
 
+        do {
+            decodeRet = avcodec_send_packet(player->m_aCodecCtx, packet);
+            if (decodeRet == AVERROR(EAGAIN)) {
+                needResend = true;
+            } else if (decodeRet == 0) {
+                needResend = false;
+                av_packet_unref(packet);
+            } else if (decodeRet < 0) {
+                char errstring[128];
+                av_strerror(decodeRet, errstring, 128);
+                av_packet_unref(packet);
+                LOGE("audio send packet failed, ret is %d, err msg: %s", decodeRet, errstring);
+                return nullptr;
+            }
+        } while (needResend);
+
+        do {
+            decodeRet = avcodec_receive_frame(player->m_aCodecCtx, frame);
+            if (decodeRet == AVERROR(EAGAIN)) {
+                LOGI("audio receive frame again.");
+                break;
+            } else if (decodeRet == AVERROR_EOF) {
+                LOGE("audio receive frame error: eof.");
+                return nullptr;
+            } else if (decodeRet < 0) {
+                LOGE("audio receive frame error, ret is %d", decodeRet);
+                return nullptr;
+            } else if (decodeRet == 0) {
+                int inBufferSize = av_samples_get_buffer_size(nullptr, frame->channels, frame->nb_samples, AVSampleFormat(frame->format), 1);
+                swr_convert(swrContext, &outBuffer, bufferSize, (const uint8_t **) frame->data, inBufferSize);
+                fwrite(outBuffer, 1, bufferSize, pcmFile);
+            }
+        } while (1);
+
+    }
+//    while (av_read_frame(player->m_fmtCtx, packet) >= 0) {
+//        if (packet->stream_index == player->m_audioIndex) {
+//            int codecRet = avcodec_send_packet(player->m_aCodecCtx, packet);
+//            if (codecRet < 0 && codecRet != AVERROR(EAGAIN) && codecRet != AVERROR_EOF) {
+//                LOGE("send packet failed. ret: %d", codecRet);
+//                break;
+//            }
+//            codecRet = avcodec_receive_frame(player->m_aCodecCtx, frame);
+//            if (codecRet < 0 && codecRet != AVERROR_EOF) {
+//                LOGE("avcodec_receive_frame failed. ret: %d", codecRet);
+//                break;
+//            }
+//            if (codecRet == 0) {
+//                //decode success.
+//                swr_convert(swrContext, &outBuffer, bufferSize, (const uint8_t **)frame->data, frame->nb_samples);
+//                int size = av_samples_get_buffer_size(nullptr, out_nb_channels, frame->nb_samples, out_sample_fmt, 1);
+//                LOGI("decode one audio frame.");
+//                fwrite(outBuffer, 1, size, pcmFile);
+//            }
+//
 //            if (decodeRet == AVERROR(EAGAIN) || decodeRet == AVERROR_EOF) {
 //                LOGE("decodeRet == AVERROR(EAGAIN) || decodeRet == AVERROR_EOF, decodeRet: %d", decodeRet);
 //            } else if (decodeRet < 0) {
@@ -396,8 +444,8 @@ void *play_audio(void *args) {
 //                LOGI("decode one audio frame.");
 //                fwrite(outBuffer, 1, size, pcmFile);
 //            }
-        }
-    }
+//        }
+//    }
 
     av_packet_free(&packet);
     swr_free(&swrContext);
