@@ -10,6 +10,19 @@
         return VAL; \
     }
 
+MediaPlayer::MediaPlayer() {
+    m_aDecodeFrame = av_frame_alloc();
+    m_aPacket = av_packet_alloc();
+    m_aSwrCtx = swr_alloc();
+}
+
+MediaPlayer::~MediaPlayer() {
+    av_frame_free(&m_aDecodeFrame);
+    av_packet_free(&m_aPacket);
+    swr_free(&m_aSwrCtx);
+    delete []m_aSwrOutBuffer;
+}
+
 //解封装、初始化解码器、OpenSL引擎等
 int MediaPlayer::init(string path, ANativeWindow *window) {
     m_path = path;
@@ -55,15 +68,33 @@ int MediaPlayer::init(string path, ANativeWindow *window) {
         return -1;
     }
 
-    //init OpenSL ES..
-//    ret = createEngine();
-//    ret = createOutputMix();
-//    ret = createPlayer();
+    int64_t out_ch_layout = AV_CH_LAYOUT_STEREO;//输出声道布局为立体声
+    AVSampleFormat out_sample_fmt = AV_SAMPLE_FMT_S16;//输出采样格式/采样精度为16位=2字节
+    int out_sample_rate = m_aCodecCtx->sample_rate;
+    int out_nb_channels = av_get_channel_layout_nb_channels(out_ch_layout);
+    int64_t in_ch_layout = av_get_default_channel_layout(m_aCodecCtx->channels);
+    AVSampleFormat in_sample_fmt = m_aCodecCtx->sample_fmt;
+    int in_sample_rate = m_aCodecCtx->sample_rate;
 
-//    pthread_mutex_init(&m_vMutex, nullptr);
+    swr_alloc_set_opts(m_aSwrCtx, out_ch_layout, out_sample_fmt, out_sample_rate, in_ch_layout, in_sample_fmt, in_sample_rate, 0,
+                       nullptr);
+    swr_init(m_aSwrCtx);
+    /**
+    * 存放重采样后的数据缓冲区 , 这个缓冲区存储 1 秒的数据
+    * 44100 Hz 采样率 , 16 位采样位数 , 双声道立体声 , 占用内存 44100 * 2 * 2 字节
+    */
+    m_aSwrOutBuffer = new uint8_t[44100 * 2 * 2];
+
+
+    //init OpenSL ES..
+    ret = createEngine();
+    ret = createOutputMix();
+    ret = createPlayer();
+
+    pthread_mutex_init(&m_vMutex, nullptr);
     pthread_mutex_init(&m_aMutex, nullptr);
-//    pthread_cond_init(&m_vCond, nullptr);
-//    pthread_create(&m_vThreadID, nullptr, play_video, this);
+    pthread_cond_init(&m_vCond, nullptr);
+    pthread_create(&m_vThreadID, nullptr, play_video, this);
     pthread_cond_init(&m_aCond, nullptr);
     pthread_create(&m_aThreadID, nullptr, play_audio, this);
 
@@ -93,10 +124,10 @@ int MediaPlayer::createOutputMix() {
     //4、通过混音器接口获取具体的混音器接口对象，并初始化具体的混音环境
     ret = (*m_slOutputMixObj)->Realize(m_slOutputMixObj, SL_BOOLEAN_FALSE);
     CHECK_OPENSL_RESULT(ret);
-//    ret = (*m_slOutputMixObj)->GetInterface(m_slOutputMixObj, SL_IID_ENVIRONMENTALREVERB, &m_slEnvReverbItf);//获取混音器具体的对象
-//    CHECK_OPENSL_RESULT(ret);
-//    ret = (*m_slEnvReverbItf)->SetEnvironmentalReverbProperties(m_slEnvReverbItf, &m_slEnvSettings);
-//    CHECK_OPENSL_RESULT(ret);
+    ret = (*m_slOutputMixObj)->GetInterface(m_slOutputMixObj, SL_IID_ENVIRONMENTALREVERB, &m_slEnvReverbItf);//获取混音器具体的对象
+    CHECK_OPENSL_RESULT(ret);
+    ret = (*m_slEnvReverbItf)->SetEnvironmentalReverbProperties(m_slEnvReverbItf, &m_slEnvSettings);
+    CHECK_OPENSL_RESULT(ret);
 
     return ret;
 }
@@ -159,9 +190,6 @@ int MediaPlayer::createPlayer() {
     ret = (*m_slBufferQueItf)->RegisterCallback(m_slBufferQueItf, bufferQueueCallback, this);
     CHECK_OPENSL_RESULT(ret);
 
-    setPlayState(SL_PLAYSTATE_PLAYING);
-    bufferQueueCallback(m_slBufferQueItf, this);
-
     return ret;
 }
 
@@ -196,73 +224,74 @@ int MediaPlayer::stop() {
 }
 
 int MediaPlayer::getPCM(void **pcm, size_t *pcm_size) {
-    AVPacket *packet = static_cast<AVPacket *>(av_malloc(sizeof(AVPacket)));
-    AVFrame *frame = av_frame_alloc();
-
-    SwrContext *swrContext = nullptr;
-    swrContext = swr_alloc();//为了将音频格式转换为pcm用于播放
-
-    int64_t out_ch_layout = AV_CH_LAYOUT_STEREO;//输出声道布局为立体声
-    AVSampleFormat out_sample_fmt = AV_SAMPLE_FMT_S16;//输出采样格式/采样精度为16位=2字节
-    int out_sample_rate = m_aCodecCtx->sample_rate;
-    int out_nb_channels = av_get_channel_layout_nb_channels(out_ch_layout);
-
-    int64_t in_ch_layout = av_get_default_channel_layout(m_aCodecCtx->channels);
-    AVSampleFormat in_sample_fmt = m_aCodecCtx->sample_fmt;
-    int in_sample_rate = m_aCodecCtx->sample_rate;
-
-    swr_alloc_set_opts(swrContext, out_ch_layout, out_sample_fmt, out_sample_rate, in_ch_layout, in_sample_fmt, in_sample_rate, 0,
-                       nullptr);
-    swr_init(swrContext);
-
-    //缓冲区大小 = 采样率 * 采样精度
-    int bufferSize = out_sample_rate * 2;
-    uint8_t *outBuffer = static_cast<uint8_t *>(av_malloc(sizeof(uint8_t) * bufferSize));
-
     int decodeRet = -1;
-    while (av_read_frame(m_fmtCtx, packet) >= 0) {
-        if (packet->stream_index == m_audioIndex) {
-            int codecRet = avcodec_send_packet(m_aCodecCtx, packet);
-            if (codecRet < 0 && codecRet != AVERROR(EAGAIN) && codecRet != AVERROR_EOF) {
-                LOGE("send packet failed. ret: %d", codecRet);
-                return -1;
-            }
-            codecRet = avcodec_receive_frame(m_aCodecCtx, frame);
-            if (codecRet < 0 && codecRet != AVERROR_EOF) {
-                LOGE("avcodec_receive_frame failed. ret: %d", codecRet);
-                return -1;
-                break;
-            }
-            if (codecRet == 0) {
-                //decode success.
-                swr_convert(swrContext, &outBuffer, bufferSize, (const uint8_t **)frame->data, frame->nb_samples);
-                int size = av_samples_get_buffer_size(nullptr, out_nb_channels, frame->nb_samples, out_sample_fmt, 1);
-                LOGI("decode one audio frame.");
-                *pcm = outBuffer;
-                *pcm_size = size;
-            }
+    bool shouldResend = false;
 
-//            if (decodeRet == AVERROR(EAGAIN) || decodeRet == AVERROR_EOF) {
-//                LOGE("decodeRet == AVERROR(EAGAIN) || decodeRet == AVERROR_EOF, decodeRet: %d", decodeRet);
-//            } else if (decodeRet < 0) {
-//                LOGE("error when decoding audio. error: %d", decodeRet);
-//                break;
-//            } else if (decodeRet == 0) {
-//                //decode success.
-//                swr_convert(swrContext, &outBuffer, bufferSize, (const uint8_t **)frame->data, frame->nb_samples);
-//                int size = av_samples_get_buffer_size(nullptr, out_nb_channels, frame->nb_samples, out_sample_fmt, 1);
-//                LOGI("decode one audio frame.");
-//                fwrite(outBuffer, 1, size, pcmFile);
-//            }
+    while (1) {
+        if (!shouldResend) {
+            decodeRet = av_read_frame(m_fmtCtx, m_aPacket);
+            if (decodeRet < 0) {
+                *pcm = nullptr;
+                *pcm_size = 0;
+            }
+            if (m_aPacket->stream_index != m_audioIndex) {
+                av_packet_unref(m_aPacket);
+                continue;
+            }
         }
+        decodeRet = avcodec_send_packet(m_aCodecCtx, m_aPacket);
+        if (decodeRet == AVERROR(EAGAIN)) {
+            shouldResend = true;
+        } else if (decodeRet == AVERROR_EOF) {
+            av_packet_unref(m_aPacket);
+        } else if (decodeRet < 0) {
+            av_packet_unref(m_aPacket);
+            LOGE("音频解码send异常. error code: %d", decodeRet);
+        } else if (decodeRet == 0) {
+            shouldResend = false;
+            av_packet_unref(m_aPacket);
+        }
+
+        decodeRet = avcodec_receive_frame(m_aCodecCtx, m_aDecodeFrame);
+        if (decodeRet == AVERROR(EAGAIN)) {
+            continue;
+        } else if (decodeRet == AVERROR_EOF) {
+            LOGI("音频解码结束.");
+            *pcm = nullptr;
+            *pcm_size = 0;
+            break;
+        } else if (decodeRet < 0) {
+            LOGE("音频解码receive异常. error code: %d", decodeRet);
+            *pcm = nullptr;
+            *pcm_size = 0;
+            break;
+        }
+
+        LOGD("音频解码了一帧.");
+        /**
+         * 这里传入样本采样率 , 获取的是延迟的样本个数
+         */
+        int64_t delay = swr_get_delay(m_aSwrCtx, m_aDecodeFrame->sample_rate);
+        /**
+         * int64_t av_rescale_rnd(int64_t a, int64_t b, int64_t c, enum AVRounding rnd) ----> a * b / c.
+         * 以 "时钟基c" 表示的 数值a 转换成以 "时钟基b" 来表示。
+         */
+         /**
+          * 输出音频采样数 = 输入音频采样数 * 输出音频采样率 / 输入音频采样率.
+          */
+        int64_t out_count = av_rescale_rnd(m_aDecodeFrame->nb_samples + delay, 44100, m_aDecodeFrame->sample_rate, AV_ROUND_UP);
+        swr_convert(m_aSwrCtx, &m_aSwrOutBuffer, out_count, (const uint8_t **) m_aDecodeFrame->data, m_aDecodeFrame->nb_samples);
+
+        *pcm_size = static_cast<size_t>(av_samples_get_buffer_size(nullptr, 2, out_count,
+                                                                   AVSampleFormat::AV_SAMPLE_FMT_S16,
+                                                                   1));
+        *pcm = new uint8_t[*pcm_size];
+        memcpy(*pcm, m_aSwrOutBuffer, *pcm_size);
+        break;
     }
 
-//    av_packet_free(&packet);
-//    swr_free(&swrContext);
-//    av_free(outBuffer);
-//    av_frame_free(&frame);
-
     return decodeRet;
+
 }
 
 #define CAST_ARGS(VAR) \
@@ -273,7 +302,7 @@ void *play_video(void *args) {
 
     CAST_ARGS(args);
 
-//    pthread_cond_wait(&player->m_vCond, &player->m_vMutex);
+    pthread_cond_wait(&player->m_vCond, &player->m_vMutex);
 
     AVFrame *frame = av_frame_alloc();
     AVPacket *packet = static_cast<AVPacket *>(av_malloc(sizeof(AVPacket)));
@@ -332,125 +361,10 @@ void *play_video(void *args) {
 void *play_audio(void *args) {
     CAST_ARGS(args);
 
-//    pthread_cond_wait(&player->m_aCond, &player->m_aMutex);
+    pthread_cond_wait(&player->m_aCond, &player->m_aMutex);
 
-    AVPacket *packet = av_packet_alloc();
-    AVFrame *frame = av_frame_alloc();
-
-    SwrContext *swrContext = nullptr;
-    swrContext = swr_alloc();//为了将音频格式转换为pcm用于播放
-
-    int64_t out_ch_layout = AV_CH_LAYOUT_STEREO;//输出声道布局为立体声
-    AVSampleFormat out_sample_fmt = AV_SAMPLE_FMT_S16;//输出采样格式/采样精度为16位=2字节
-    int out_sample_rate = player->m_aCodecCtx->sample_rate;
-    int out_nb_channels = av_get_channel_layout_nb_channels(out_ch_layout);
-
-    int64_t in_ch_layout = av_get_default_channel_layout(player->m_aCodecCtx->channels);
-    AVSampleFormat in_sample_fmt = player->m_aCodecCtx->sample_fmt;
-    int in_sample_rate = player->m_aCodecCtx->sample_rate;
-
-    swr_alloc_set_opts(swrContext, out_ch_layout, out_sample_fmt, out_sample_rate, in_ch_layout, in_sample_fmt, in_sample_rate, 0,
-                       nullptr);
-    swr_init(swrContext);
-
-    //缓冲区大小 = 采样率 * 采样精度
-    int bufferSize = av_samples_get_buffer_size(nullptr, out_nb_channels, player->m_aCodecCtx->frame_size, out_sample_fmt, 1);
-    uint8_t *outBuffer = static_cast<uint8_t *>(av_malloc(sizeof(uint8_t) * bufferSize));
-
-    FILE *pcmFile = fopen("sdcard/audio.pcm", "wb");
-    if (pcmFile == nullptr) {
-        LOGE("创建音频输出文件失败");
-        return nullptr;
-    }
-
-    int decodeRet = -1;
-    bool needResend = false;
-    while(1) {
-        decodeRet = av_read_frame(player->m_fmtCtx, packet);
-        if (decodeRet < 0) {
-            if (decodeRet != AVERROR_EOF) {
-                LOGE("read audio frame failed, ret is %d", decodeRet);
-                break;
-            }
-            LOGI("read audio frame eof.");
-            break;
-        }
-        LOGD("read audio frame success.");
-
-        do {
-            decodeRet = avcodec_send_packet(player->m_aCodecCtx, packet);
-            if (decodeRet == AVERROR(EAGAIN)) {
-                needResend = true;
-            } else if (decodeRet == 0) {
-                needResend = false;
-                av_packet_unref(packet);
-            } else if (decodeRet < 0) {
-                char errstring[128];
-                av_strerror(decodeRet, errstring, 128);
-                av_packet_unref(packet);
-                LOGE("audio send packet failed, ret is %d, err msg: %s", decodeRet, errstring);
-                return nullptr;
-            }
-        } while (needResend);
-
-        do {
-            decodeRet = avcodec_receive_frame(player->m_aCodecCtx, frame);
-            if (decodeRet == AVERROR(EAGAIN)) {
-                LOGI("audio receive frame again.");
-                break;
-            } else if (decodeRet == AVERROR_EOF) {
-                LOGE("audio receive frame error: eof.");
-                return nullptr;
-            } else if (decodeRet < 0) {
-                LOGE("audio receive frame error, ret is %d", decodeRet);
-                return nullptr;
-            } else if (decodeRet == 0) {
-                int inBufferSize = av_samples_get_buffer_size(nullptr, frame->channels, frame->nb_samples, AVSampleFormat(frame->format), 1);
-                swr_convert(swrContext, &outBuffer, bufferSize, (const uint8_t **) frame->data, inBufferSize);
-                fwrite(outBuffer, 1, bufferSize, pcmFile);
-            }
-        } while (1);
-
-    }
-//    while (av_read_frame(player->m_fmtCtx, packet) >= 0) {
-//        if (packet->stream_index == player->m_audioIndex) {
-//            int codecRet = avcodec_send_packet(player->m_aCodecCtx, packet);
-//            if (codecRet < 0 && codecRet != AVERROR(EAGAIN) && codecRet != AVERROR_EOF) {
-//                LOGE("send packet failed. ret: %d", codecRet);
-//                break;
-//            }
-//            codecRet = avcodec_receive_frame(player->m_aCodecCtx, frame);
-//            if (codecRet < 0 && codecRet != AVERROR_EOF) {
-//                LOGE("avcodec_receive_frame failed. ret: %d", codecRet);
-//                break;
-//            }
-//            if (codecRet == 0) {
-//                //decode success.
-//                swr_convert(swrContext, &outBuffer, bufferSize, (const uint8_t **)frame->data, frame->nb_samples);
-//                int size = av_samples_get_buffer_size(nullptr, out_nb_channels, frame->nb_samples, out_sample_fmt, 1);
-//                LOGI("decode one audio frame.");
-//                fwrite(outBuffer, 1, size, pcmFile);
-//            }
-//
-//            if (decodeRet == AVERROR(EAGAIN) || decodeRet == AVERROR_EOF) {
-//                LOGE("decodeRet == AVERROR(EAGAIN) || decodeRet == AVERROR_EOF, decodeRet: %d", decodeRet);
-//            } else if (decodeRet < 0) {
-//                LOGE("error when decoding audio. error: %d", decodeRet);
-//                break;
-//            } else if (decodeRet == 0) {
-//                //decode success.
-//                swr_convert(swrContext, &outBuffer, bufferSize, (const uint8_t **)frame->data, frame->nb_samples);
-//                int size = av_samples_get_buffer_size(nullptr, out_nb_channels, frame->nb_samples, out_sample_fmt, 1);
-//                LOGI("decode one audio frame.");
-//                fwrite(outBuffer, 1, size, pcmFile);
-//            }
-//        }
-//    }
-
-    av_packet_free(&packet);
-    swr_free(&swrContext);
-    av_free(outBuffer);
-    av_frame_free(&frame);
+    player->setPlayState(SL_PLAYSTATE_PLAYING);
+    bufferQueueCallback(player->m_slBufferQueItf, player);
 
     pthread_detach(player->m_aThreadID);
     return nullptr;

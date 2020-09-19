@@ -27,6 +27,8 @@ class MediaPlayer {
     friend void bufferQueueCallback(SLAndroidSimpleBufferQueueItf  slBufferQueueItf, void* context);
 
 public:
+    MediaPlayer();
+    ~MediaPlayer();
     int init(string path, ANativeWindow *window);
     int play();
     int pause();
@@ -53,6 +55,10 @@ private:
     AVCodecContext *m_vCodecCtx = nullptr;
     AVCodecContext *m_aCodecCtx = nullptr;
     SwsContext *m_swsCtx = nullptr;
+    AVFrame *m_aDecodeFrame = nullptr;
+    AVPacket *m_aPacket = nullptr;
+    SwrContext *m_aSwrCtx = nullptr;
+    uint8_t *m_aSwrOutBuffer = nullptr;
 
     int m_videoIndex = -1;
     int m_audioIndex = -1;

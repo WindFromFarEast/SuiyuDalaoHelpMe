@@ -27,7 +27,7 @@ public class PlayerActivity extends AppCompatActivity {
             @Override
             public void surfaceCreated(SurfaceHolder surfaceHolder) {
                 mediaPlayer = new MediaPlayer();
-                mediaPlayer.init("sdcard/music.mp3", surfaceHolder.getSurface());
+                mediaPlayer.init("sdcard/dance.mp4", surfaceHolder.getSurface());
                 mediaPlayer.play();
             }
 
