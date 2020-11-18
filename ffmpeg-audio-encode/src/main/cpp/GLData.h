@@ -26,9 +26,15 @@ typedef struct Rect {
     float bottom;
 } Rect;
 
+typedef struct ImageBuffer {
+    void *data[4];
+    int pitch[4];
+} ImageBuffer;
+
 typedef struct GLFrame {
     GLuint texID;
     Size texSize;
+    ImageBuffer buffer;
 } GLFrame;
 
 #endif //FFMPEG4ANDROID_MASTER_GLDATA_H
