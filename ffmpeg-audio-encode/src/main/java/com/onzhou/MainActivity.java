@@ -8,6 +8,7 @@ import android.view.View;
 
 import com.onzhou.audio.encode.R;
 import com.onzhou.audio.main.PlayerActivity;
+import com.onzhou.ui.RecorderActivity;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -22,5 +23,13 @@ public class MainActivity extends AppCompatActivity {
                 startActivity(new Intent(MainActivity.this, PlayerActivity.class));
             }
         });
+
+        findViewById(R.id.btn_recorder).setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                startActivity(new Intent(MainActivity.this, RecorderActivity.class));
+            }
+        });
+
     }
 }

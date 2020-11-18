@@ -40,7 +40,7 @@ public:
     void destroyEGL();
     void updateRenderContent(GLuint surfaceTextureID, float mvp[]);
 
-    void display(GLuint texID);
+    void display(GLuint texID, int width, int height);
 
     void setOnOpenGLCreateCallback(std::function<int(void*)> func) { m_onOpenGLCreateCallback = func; };
     void setOnOpenGLRunningCallback(std::function<void(void*)> func) { m_onOpenGLRunningCallback = func; };

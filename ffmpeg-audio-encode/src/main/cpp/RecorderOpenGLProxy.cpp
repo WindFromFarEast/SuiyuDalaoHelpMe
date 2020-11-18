@@ -141,10 +141,10 @@ void RecorderOpenGLProxy::updateRenderContent(GLuint surfaceTextureID, float *mv
     pthread_mutex_unlock(&m_mutex);
 }
 
-void RecorderOpenGLProxy::display(GLuint texID) {
+void RecorderOpenGLProxy::display(GLuint texID, int width, int height) {
     GLFrame frame = {
             .texID = texID,
-            .texSize = { 720, 1280 },
+            .texSize = { width, height },
     };
     m_glDisplayer.draw(frame);
 }
@@ -167,11 +167,6 @@ void *render_thread(void *args) {
         proxy->m_onOpenGLCreateCallback(&proxy->recorderEnv);
     }
 
-    Size outSize = {
-            .width = 720,
-            .height = 1280
-    };
-    proxy->m_glTransformer.setOutputTexData(outSize);
     proxy->m_glTransformer.setRotate(90);
     proxy->m_glTransformer.setFlip(true, false);
     ret = proxy->initRenderEnv();
@@ -188,25 +183,18 @@ void *render_thread(void *args) {
             proxy->m_onOpenGLRunningCallback(&proxy->recorderEnv);
         }
 
-        //OES转普通纹理
-        Size oesTexSize = {
-                .width = 1280,
-                .height = 720
-        };
-        proxy->m_glOESTransformer.setTextureData(proxy->m_iSurfaceTextureID, oesTexSize);
-        GLuint commonTexID = proxy->m_glOESTransformer.transform();
+        //OES转普通纹理,1280 720表示输出纹理分辨率
+        GLuint commonTexID = proxy->m_glOESTransformer.transform(proxy->m_iSurfaceTextureID, 1280, 720);
 
         //Camera帧旋转\翻转处理
-        GLFrame afterOesFrame = {
-                .texID = commonTexID,
-                .texSize = {.width = 1280, .height = 720},
-        };
-        proxy->m_glTransformer.setInputTexData(afterOesFrame);
-        GLFrame transformFrame;
-        proxy->m_glTransformer.transform(transformFrame);
+        GLuint transformTexID = proxy->m_glTransformer.transform(commonTexID, 720, 1280);
 
-        //上屏
-        proxy->display(transformFrame.texID);
+        //上屏 这里的720 1280表示输入纹理的分辨率
+        proxy->display(transformTexID, 720, 1280);
+
+        glDeleteTextures(1, &commonTexID);
+        glDeleteTextures(1, &transformTexID);
+
         proxy->swapBuffers();
         pthread_mutex_unlock(&proxy->m_mutex);
     }

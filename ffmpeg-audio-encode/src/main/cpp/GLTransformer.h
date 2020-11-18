@@ -13,14 +13,7 @@
 class GLTransformer {
 public:
     int init();
-    GLuint transform(GLFrame &output);
-    void setInputTexData(GLFrame frame) {
-        m_iTexID = frame.texID;
-        m_inSize = frame.texSize;
-    };
-    void setOutputTexData(Size outputSize) {
-        m_outSize = outputSize;
-    };
+    GLuint transform(GLuint inputTex, int width, int height);
     void setRotate(int degree) {
         m_iRotateDegree = degree;
     };
@@ -30,13 +23,7 @@ public:
     };
 
 private:
-    GLuint m_iTexID = 0;
-
-    Size m_inSize;
-    Size m_outSize;
-
     GLuint m_iFbo = 0;
-    GLuint m_iFboTexID = 0;
 
     GLint m_iVertexPosLoc = -1;
     GLint m_iTexturePosLoc = -1;

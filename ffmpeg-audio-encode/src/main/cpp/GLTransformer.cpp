@@ -3,6 +3,7 @@
 //
 
 #include "GLTransformer.h"
+#include "TextureAllocator.h"
 
 static const char *vertexShaderCode = {
         "attribute vec2 a_position;\n"
@@ -23,39 +24,25 @@ static const char *fragmentShaderCode = {
 };
 
 int GLTransformer::init() {
-    //创建并初始化输出纹理
-    glGenTextures(1, &m_iFboTexID);
-    if (m_iFboTexID <= 0) {
-        LOGE("glGenTextures failed!");
-        return GL_GEN_TEXTURE_ERROR;
-    }
-    glBindTexture(GL_TEXTURE_2D, m_iFboTexID);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, m_outSize.width, m_outSize.height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
-    glBindTexture(GL_TEXTURE_2D, 0);
-
     //创建并初始化FBO
     glGenFramebuffers(1, &m_iFbo);
     if (m_iFbo <= 0) {
         LOGE("glGenFramebuffers failed!");
         return GL_GEN_FBO_ERROR;
     }
-    glBindFramebuffer(GL_FRAMEBUFFER, m_iFbo);
-    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, m_iFboTexID, 0);
-    GLenum error = glGetError();
-    if (error != GL_NO_ERROR) {
-        LOGE("glGetError.. error is %d  %s:%d", error, __FUNCTION__, __LINE__);
-        return error;
-    }
-    error = glCheckFramebufferStatus(GL_FRAMEBUFFER);
-    if (error != GL_FRAMEBUFFER_COMPLETE) {
-        LOGE("glCheckFramebufferStatus.. error is %d  %s:%d", error, __FUNCTION__, __LINE__);
-        return error;
-    }
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+//    glBindFramebuffer(GL_FRAMEBUFFER, m_iFbo);
+//    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, m_iFboTexID, 0);
+//    GLenum error = glGetError();
+//    if (error != GL_NO_ERROR) {
+//        LOGE("glGetError.. error is %d  %s:%d", error, __FUNCTION__, __LINE__);
+//        return error;
+//    }
+//    error = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+//    if (error != GL_FRAMEBUFFER_COMPLETE) {
+//        LOGE("glCheckFramebufferStatus.. error is %d  %s:%d", error, __FUNCTION__, __LINE__);
+//        return error;
+//    }
+//    glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
     //初始化GLProgram
     int ret = m_program.init(vertexShaderCode, fragmentShaderCode);
@@ -89,13 +76,27 @@ int GLTransformer::init() {
     return READY;
 }
 
-GLuint GLTransformer::transform(GLFrame &output) {
+GLuint GLTransformer::transform(GLuint inputTex, int width, int height) {
+    GLuint outputTex = TextureAllocator::allocateTexture(width, height);
+
     m_program.use();
 
     glBindFramebuffer(GL_FRAMEBUFFER, m_iFbo);
-    glViewport(0, 0, m_outSize.width, m_outSize.height);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, outputTex, 0);
+    GLenum error = glGetError();
+    if (error != GL_NO_ERROR) {
+        LOGE("glGetError.. error is %d  %s:%d", error, __FUNCTION__, __LINE__);
+        return error;
+    }
+    error = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+    if (error != GL_FRAMEBUFFER_COMPLETE) {
+        LOGE("glCheckFramebufferStatus.. error is %d  %s:%d", error, __FUNCTION__, __LINE__);
+        return error;
+    }
+
+    glViewport(0, 0, width, height);
     glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, m_iTexID);
+    glBindTexture(GL_TEXTURE_2D, inputTex);
 
     float vertexData[] = {
             -1.f, 1.f,
@@ -140,8 +141,5 @@ GLuint GLTransformer::transform(GLFrame &output) {
 
     glFinish();
 
-    output.texSize = m_outSize;
-    output.texID = m_iFboTexID;
-
-    return 0;
+    return outputTex;
 }

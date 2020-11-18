@@ -7,7 +7,6 @@
 #include "iostream"
 #include <unistd.h>
 #include "sstream"
-#include "../../../../libyuv-single/libs/armeabi-v7a/include/libyuv.h"
 #include "thread"
 
 Encoder::Encoder() {
